@@ -1,4 +1,4 @@
-import type { HudScores, LanguageOption, MissionResult } from '../types';
+import type { HudScores, LanguageOption, MissionResult, PostTestQuestion } from '../types';
 
 const headers = { 'Content-Type': 'application/json' };
 const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
@@ -49,13 +49,31 @@ export const api = {
     });
   },
 
-  async chatWithCoach(question: string): Promise<string> {
+  async chatWithCoach(
+    question: string,
+    language: LanguageOption,
+  ): Promise<{ simpleEnglishQuestion: string; englishAnswer: string; translatedAnswer: string | null }> {
     const response = await fetch(buildApiUrl('/api/chat'), {
       method: 'POST',
       headers,
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, language }),
     });
     const data = await response.json();
-    return (data.answer as string) || 'No response available.';
+    return {
+      simpleEnglishQuestion:
+        (data.simpleEnglishQuestion as string) ||
+        'You are asking for a simpler explanation about a security concept.',
+      englishAnswer: (data.englishAnswer as string) || (data.answer as string) || 'No response available.',
+      translatedAnswer: (data.translatedAnswer as string) || null,
+    };
+  },
+
+  async getPostTestQuiz(): Promise<{ questions: PostTestQuestion[]; source: string }> {
+    const response = await fetch(buildApiUrl('/api/post-test-quiz'));
+    const data = await response.json();
+    return {
+      questions: (data.questions as PostTestQuestion[]) || [],
+      source: (data.source as string) || 'fallback',
+    };
   },
 };

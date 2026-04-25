@@ -3,9 +3,9 @@ import { GuardSimScene } from './game/GuardSimScene';
 import { api } from './services/api';
 import { useGameStore } from './state/gameStore';
 import { calculateMissionResult } from './utils/scoring';
-import type { LanguageOption } from './types';
+import type { LanguageOption, PostTestQuestion } from './types';
 
-const languages: LanguageOption[] = ['English', 'Arabic', 'Hindi', 'Punjabi', 'Urdu', 'Tagalog', 'Spanish'];
+const languages: LanguageOption[] = ['English', 'Arabic', 'Hindi', 'Punjabi', 'Urdu', 'Tagalog', 'Spanish', 'Persian'];
 const studentId = 'demo-user';
 const sceneTitles = {
   patrol: 'Guided patrol',
@@ -58,8 +58,15 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachInput, setCoachInput] = useState('');
-  const [coachAnswer, setCoachAnswer] = useState('');
+  const [coachQuestionSimple, setCoachQuestionSimple] = useState('');
+  const [coachAnswerEnglish, setCoachAnswerEnglish] = useState('');
+  const [coachAnswerTranslated, setCoachAnswerTranslated] = useState('');
   const [coachLoading, setCoachLoading] = useState(false);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizSource, setQuizSource] = useState('');
+  const [quizQuestions, setQuizQuestions] = useState<PostTestQuestion[]>([]);
+  const [quizSelections, setQuizSelections] = useState<Record<string, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
   const currentStep = mission.steps[currentStepId];
 
   const result = useMemo(() => calculateMissionResult(scoreHistory), [scoreHistory]);
@@ -145,10 +152,45 @@ function App() {
     const question = (prompt ?? coachInput).trim();
     if (!question) return;
     setCoachLoading(true);
-    const answer = await api.chatWithCoach(question).catch(() => 'Coach is unavailable right now. Please try again.');
-    setCoachAnswer(answer);
+    const answer = await api
+      .chatWithCoach(question, selectedLanguage)
+      .catch(() => ({
+        simpleEnglishQuestion: 'Your question asks for a security concept explanation in simple words.',
+        englishAnswer: 'Coach is unavailable right now. Please try again.',
+        translatedAnswer: null,
+      }));
+    setCoachQuestionSimple(answer.simpleEnglishQuestion);
+    setCoachAnswerEnglish(answer.englishAnswer);
+    setCoachAnswerTranslated(answer.translatedAnswer || '');
     setCoachLoading(false);
   };
+
+  const copyText = async (text: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      // ignore clipboard errors silently
+    }
+  };
+
+  const startPostTest = async () => {
+    setQuizLoading(true);
+    const payload = await api.getPostTestQuiz().catch(() => ({ questions: [], source: 'fallback' }));
+    setQuizQuestions(payload.questions);
+    setQuizSource(payload.source);
+    setQuizSelections({});
+    setQuizSubmitted(false);
+    setQuizLoading(false);
+    setScreen('quiz');
+  };
+
+  const scoreQuiz = useMemo(() => {
+    if (quizQuestions.length === 0) return { correct: 0, total: 0, percent: 0 };
+    const correct = quizQuestions.reduce((sum, question) => (quizSelections[question.id] === question.answerIndex ? sum + 1 : sum), 0);
+    const total = quizQuestions.length;
+    return { correct, total, percent: Math.round((correct / total) * 100) };
+  }, [quizQuestions, quizSelections]);
 
   return (
     <div className="layout app-bg">
@@ -322,7 +364,60 @@ function App() {
           <div className="row">
             <button onClick={startMission}>Retry Mission</button>
             <button onClick={resetMission}>Back to Mission Select</button>
+            <button onClick={startPostTest} disabled={quizLoading}>
+              {quizLoading ? 'Loading Post-Test...' : 'Start Post-Test Quiz'}
+            </button>
           </div>
+        </section>
+      )}
+
+      {currentScreen === 'quiz' && (
+        <section className="card">
+          <div className="between">
+            <h2>Post-Test Quiz</h2>
+            <button onClick={() => setScreen('summary')}>Back to Summary</button>
+          </div>
+          <p>Questions are generated from POST-TEST content in your uploaded manual. Source: <strong>{quizSource || 'loading'}</strong></p>
+          {quizQuestions.length === 0 && <p>No quiz questions found yet. Try again after PDF context loads.</p>}
+          {quizQuestions.map((question, index) => (
+            <article key={question.id} className="quiz-card">
+              <p><strong>Q{index + 1} ({question.module}):</strong> {question.question}</p>
+              <div className="choices">
+                {question.options.map((option, optionIndex) => (
+                  <button
+                    key={`${question.id}-${optionIndex}`}
+                    className={quizSelections[question.id] === optionIndex ? 'selected' : ''}
+                    onClick={() => setQuizSelections((prev) => ({ ...prev, [question.id]: optionIndex }))}
+                  >
+                    {String.fromCharCode(65 + optionIndex)}. {option}
+                  </button>
+                ))}
+              </div>
+              {quizSubmitted && (
+                <p className={quizSelections[question.id] === question.answerIndex ? 'good' : 'risk'}>
+                  {quizSelections[question.id] === question.answerIndex ? 'Correct' : 'Incorrect'} | Answer: {String.fromCharCode(65 + question.answerIndex)}
+                </p>
+              )}
+            </article>
+          ))}
+          {quizQuestions.length > 0 && (
+            <div className="row two-col">
+              <button onClick={() => setQuizSubmitted(true)}>Submit Quiz</button>
+              <button
+                onClick={() => {
+                  setQuizSelections({});
+                  setQuizSubmitted(false);
+                }}
+              >
+                Reset Answers
+              </button>
+            </div>
+          )}
+          {quizSubmitted && (
+            <p className="score">
+              Quiz Score: {scoreQuiz.correct}/{scoreQuiz.total} ({scoreQuiz.percent}%)
+            </p>
+          )}
         </section>
       )}
 
@@ -357,15 +452,40 @@ function App() {
               <button
                 onClick={() => {
                   setCoachInput('');
-                  setCoachAnswer('');
+                  setCoachQuestionSimple('');
+                  setCoachAnswerEnglish('');
+                  setCoachAnswerTranslated('');
                 }}
               >
                 Clear
               </button>
             </div>
             <div className="coach-answer">
-              <strong>Coach Answer</strong>
-              <p>{coachAnswer || 'Ask a concept question to begin.'}</p>
+              <div className="between">
+                <strong>Your Question (Simple English)</strong>
+                <button className="ghost-btn" onClick={() => copyText(coachQuestionSimple)} disabled={!coachQuestionSimple}>
+                  Copy
+                </button>
+              </div>
+              <p>{coachQuestionSimple || 'Simple-English interpretation appears after you ask.'}</p>
+              <div className="between">
+                <strong>Coach Answer (English)</strong>
+                <button className="ghost-btn" onClick={() => copyText(coachAnswerEnglish)} disabled={!coachAnswerEnglish}>
+                  Copy
+                </button>
+              </div>
+              <p>{coachAnswerEnglish || 'Ask a concept question to begin.'}</p>
+              {selectedLanguage !== 'English' && (
+                <>
+                  <div className="between">
+                    <strong>Coach Answer ({selectedLanguage})</strong>
+                    <button className="ghost-btn" onClick={() => copyText(coachAnswerTranslated)} disabled={!coachAnswerTranslated}>
+                      Copy
+                    </button>
+                  </div>
+                  <p>{coachAnswerTranslated || 'Translation will appear here after reply.'}</p>
+                </>
+              )}
             </div>
           </div>
         </aside>

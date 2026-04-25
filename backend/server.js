@@ -30,6 +30,7 @@ const translate = useAws ? new TranslateClient({ region }) : null;
 const polly = useAws ? new PollyClient({ region }) : null;
 const ddbDoc = useAws ? DynamoDBDocumentClient.from(new DynamoDBClient({ region })) : null;
 let cachedManualText = '';
+let cachedManualRaw = '';
 let manualLoadPromise = null;
 
 app.use(cors());
@@ -114,6 +115,39 @@ const buildCoachFallback = (question) => {
   return 'Security practice tip: focus on safety, legal limits, clear communication, and objective documentation. Ask me about trespassing, escalation, or note writing for specific guidance.';
 };
 
+const buildSimpleEnglishQuestion = (question) => {
+  const trimmed = String(question || '').replace(/\s+/g, ' ').trim();
+  if (!trimmed) return 'You are asking for help with a security concept.';
+  if (trimmed.length <= 90) return `Simple meaning: You want to understand "${trimmed}" in easy English.`;
+  return `Simple meaning: You want an easy-English explanation about this security topic: "${trimmed.slice(0, 90)}..."`;
+};
+
+const glossaryRules = [
+  {
+    aliases: ['trespassing', 'thresspassing', 'tresspassing', 'trespass'],
+    simpleEnglish: 'Trespassing: person who is entering an area they should not enter.',
+    englishAnswer:
+      'Trespassing means a person enters private property or a restricted area without permission. A guard should direct them to leave, observe safely, and report.',
+    translations: {
+      Hindi: 'अतिक्रमण करना - वह व्यक्ति जो किसी ऐसे क्षेत्र में प्रवेश कर रहा है जहाँ उसे प्रवेश नहीं करना चाहिए',
+      Persian: 'تجاوزگر - شخصی که وارد منطقه ای می شود که نباید وارد شود',
+    },
+  },
+  {
+    aliases: ['immediately', 'immediatly', 'immediate'],
+    simpleEnglish: 'Immediately means doing something without delay, instantly, or with no intervening time',
+    englishAnswer: 'Immediately means doing something without delay, instantly, or with no intervening time',
+    translations: {
+      Persian: 'فوراً به معنای انجام کاری بدون تأخیر، فوراً یا بدون هیچ فاصله زمانی است',
+    },
+  },
+];
+
+const getGlossaryMatch = (question) => {
+  const normalized = String(question || '').toLowerCase().replace(/[^a-z]/g, '');
+  return glossaryRules.find((rule) => rule.aliases.some((alias) => normalized.includes(alias)));
+};
+
 const getAwsCoachAnswer = async (question) => {
   if (!bedrock) return null;
   try {
@@ -148,6 +182,7 @@ const languageCodeMap = {
   Urdu: 'ur',
   Tagalog: 'tl',
   Spanish: 'es',
+  Persian: 'fa',
 };
 
 const streamToBuffer = async (audioStream) => {
@@ -173,13 +208,19 @@ const ensureManualLoaded = async () => {
       return result;
     })
     .then((result) => {
-      cachedManualText = String(result.text || '')
+      cachedManualRaw = String(result.text || '');
+      cachedManualText = cachedManualRaw
         .replace(/\s+/g, ' ')
         .trim();
       return cachedManualText;
     })
     .catch(() => '');
   return manualLoadPromise;
+};
+
+const ensureManualRawLoaded = async () => {
+  await ensureManualLoaded();
+  return cachedManualRaw;
 };
 
 const getManualContext = async (question) => {
@@ -206,6 +247,120 @@ const getManualContext = async (question) => {
   });
 
   return [...new Set(windows)].join('\n---\n').slice(0, 2200);
+};
+
+const fallbackPostTestQuestions = [
+  {
+    id: 'm1-q1',
+    module: 'Module 1',
+    question: 'What is the primary role of a security professional?',
+    options: ['Punish offenders', 'Observe, deter, and report', 'Replace police', 'Search all suspicious people'],
+    answerIndex: 1,
+  },
+  {
+    id: 'm2-q1',
+    module: 'Module 2',
+    question: 'When a trespasser refuses to leave after lawful direction, what is the best next step?',
+    options: ['Use immediate force', 'Call police and continue safe observation', 'Ignore behavior', 'Leave post'],
+    answerIndex: 1,
+  },
+  {
+    id: 'm3-q1',
+    module: 'Module 3',
+    question: 'Professional communication during conflict should be:',
+    options: ['Aggressive and loud', 'Calm, clear, and respectful', 'Silent and dismissive', 'Threat-based'],
+    answerIndex: 1,
+  },
+  {
+    id: 'm4-q1',
+    module: 'Module 4',
+    question: 'Good incident notes should contain:',
+    options: ['Personal opinions only', 'Date, time, location, observed facts, actions taken', 'Only suspect name', 'No details if police arrive'],
+    answerIndex: 1,
+  },
+  {
+    id: 'm5-q1',
+    module: 'Module 5',
+    question: 'When speaking to media, a guard should:',
+    options: ['Share private details off record', 'Refer to authorized spokesperson', 'Guess if unsure', 'Refuse all communication rudely'],
+    answerIndex: 1,
+  },
+  {
+    id: 'm6-q1',
+    module: 'Module 6',
+    question: 'During an alarm/emergency event, the guard should:',
+    options: ['Disable alarm immediately', 'Follow emergency procedure and report', 'Ignore until manager arrives', 'Leave site immediately'],
+    answerIndex: 1,
+  },
+];
+
+const extractModuleBlocks = (rawText) => {
+  const text = String(rawText || '').replace(/\r/g, '\n');
+  const matches = [...text.matchAll(/module\s+(\d{1,2})/gi)];
+  if (matches.length === 0) return [];
+  return matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const end = index < matches.length - 1 ? matches[index + 1].index ?? text.length : text.length;
+    return { module: `Module ${match[1]}`, content: text.slice(start, end) };
+  });
+};
+
+const extractAnswerMap = (rawText) => {
+  const text = String(rawText || '').replace(/\r/g, '\n');
+  const answerStart = text.toLowerCase().indexOf('answers to post-test');
+  if (answerStart === -1) return {};
+  const tail = text.slice(answerStart);
+  const blocks = extractModuleBlocks(tail);
+  const map = {};
+  blocks.forEach((block) => {
+    const answers = {};
+    const pairs = [...block.content.matchAll(/(\d{1,2})\s*[\.\)]?\s*([A-D])/gi)];
+    pairs.forEach((pair) => {
+      answers[Number(pair[1])] = pair[2].toUpperCase();
+    });
+    map[block.module] = answers;
+  });
+  return map;
+};
+
+const extractPostTestQuestions = async () => {
+  const rawText = await ensureManualRawLoaded();
+  if (!rawText) return { source: 'fallback', questions: fallbackPostTestQuestions };
+  const blocks = extractModuleBlocks(rawText);
+  const answerMapByModule = extractAnswerMap(rawText);
+  const questions = [];
+
+  blocks.forEach((block) => {
+    const marker = block.content.toLowerCase().indexOf('post-test');
+    if (marker === -1) return;
+    const postSection = block.content.slice(marker, marker + 12000);
+    const questionMatches = [
+      ...postSection.matchAll(/(?:^|\n)\s*(\d{1,2})\s*[\.\)]\s+(.{15,220}\?)([\s\S]*?)(?=(?:\n\s*\d{1,2}\s*[\.\)]\s+.{10,220}\?)|$)/gm),
+    ];
+
+    questionMatches.slice(0, 4).forEach((match) => {
+      const questionNo = Number(match[1]);
+      const questionText = match[2].replace(/\s+/g, ' ').trim();
+      const optionText = match[3];
+      const optionMatches = [...optionText.matchAll(/([A-D])\s*[\.\)]\s+([^\n]{3,180})/g)];
+      if (optionMatches.length < 2) return;
+      const options = optionMatches.map((item) => item[2].replace(/\s+/g, ' ').trim()).slice(0, 4);
+      const answerLetter = answerMapByModule[block.module]?.[questionNo];
+      const answerIndex = answerLetter ? ['A', 'B', 'C', 'D'].indexOf(answerLetter) : 0;
+      questions.push({
+        id: `${block.module.replace(/\s+/g, '-').toLowerCase()}-q${questionNo}`,
+        module: block.module,
+        question: questionText,
+        options,
+        answerIndex: answerIndex >= 0 ? answerIndex : 0,
+      });
+    });
+  });
+
+  if (questions.length < 5) {
+    return { source: 'fallback', questions: fallbackPostTestQuestions };
+  }
+  return { source: 'pdf-post-test', questions: questions.slice(0, 12) };
 };
 
 app.get('/api/missions', (_req, res) => {
@@ -332,16 +487,56 @@ app.post('/api/audio', async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   const question = String(req.body.question || '').trim();
+  const language = String(req.body.language || 'English');
   if (!question) {
     res.status(400).json({ message: 'Question is required.' });
     return;
   }
+  const glossaryMatch = getGlossaryMatch(question);
   const manualContext = await getManualContext(question);
-  const awsAnswer = await getAwsCoachAnswer(question);
-  const fallback = manualContext
-    ? `Manual reference: ${manualContext.slice(0, 520)}...`
-    : buildCoachFallback(question);
-  res.json({ answer: awsAnswer || fallback });
+  const awsAnswer = glossaryMatch ? null : await getAwsCoachAnswer(question);
+  const fallback = glossaryMatch
+    ? glossaryMatch.englishAnswer
+    : manualContext
+      ? `Manual reference: ${manualContext.slice(0, 520)}...`
+      : buildCoachFallback(question);
+  const englishAnswer = awsAnswer || fallback;
+  const simpleEnglishQuestion = glossaryMatch ? glossaryMatch.simpleEnglish : buildSimpleEnglishQuestion(question);
+
+  if (language !== 'English') {
+    const glossaryTranslation = glossaryMatch?.translations?.[language];
+    if (glossaryTranslation) {
+      res.json({ answer: glossaryTranslation, simpleEnglishQuestion, englishAnswer, translatedAnswer: glossaryTranslation });
+      return;
+    }
+    if (useAws && translate) {
+      try {
+        const response = await translate.send(
+          new TranslateTextCommand({
+            Text: englishAnswer,
+            SourceLanguageCode: 'en',
+            TargetLanguageCode: languageCodeMap[language] || 'en',
+          }),
+        );
+        const translated = response.TranslatedText || englishAnswer;
+        res.json({ answer: translated, simpleEnglishQuestion, englishAnswer, translatedAnswer: translated });
+        return;
+      } catch (error) {
+        // fallback below
+      }
+    }
+
+    const translated = mockTranslate(englishAnswer, language);
+    res.json({ answer: translated, simpleEnglishQuestion, englishAnswer, translatedAnswer: translated });
+    return;
+  }
+
+  res.json({ answer: englishAnswer, simpleEnglishQuestion, englishAnswer, translatedAnswer: null });
+});
+
+app.get('/api/post-test-quiz', async (_req, res) => {
+  const payload = await extractPostTestQuestions();
+  res.json(payload);
 });
 
 app.post('/api/mission-result', async (req, res) => {
