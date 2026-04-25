@@ -1,4 +1,4 @@
-export type LanguageOption = 'English' | 'Arabic' | 'Hindi' | 'Punjabi' | 'Urdu' | 'Tagalog' | 'Spanish';
+export type LanguageOption = 'English' | 'Arabic' | 'Hindi' | 'Punjabi' | 'Urdu' | 'Tagalog' | 'Spanish' | 'Persian';
 
 export type CameraNodeKey = 'securityPost' | 'fenceLine' | 'trailerArea' | 'policeArrival';
 
@@ -51,4 +51,12 @@ export interface MissionResult {
   situationControlScore: number;
   documentationScore: number;
   weakTopics: string[];
+}
+
+export interface PostTestQuestion {
+  id: string;
+  module: string;
+  question: string;
+  options: string[];
+  answerIndex: number;
 }
