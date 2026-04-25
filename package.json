@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:web": "vite",
-    "dev:api": "set PORT=8788&& node backend/server.js",
+    "dev:api": "cross-env PORT=8788 node backend/server.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "start:api": "set PORT=8788&& node backend/server.js"
+    "start:api": "cross-env PORT=8788 node backend/server.js",
+    "start:api:prod": "node backend/server.js"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -18,6 +19,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.10"
   },
@@ -27,11 +29,17 @@
     "@aws-sdk/client-polly": "^3.1037.0",
     "@aws-sdk/client-translate": "^3.1037.0",
     "@aws-sdk/lib-dynamodb": "^3.1037.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.11.0",
     "phaser": "^4.0.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "three": "^0.184.0",
+    "zustand": "^5.0.12"
   }
 }

@@ -161,6 +161,31 @@ app.post('/api/missions/:missionId/decision', async (req, res) => {
   });
 });
 
+app.post('/api/feedback', async (req, res) => {
+  const { scenarioText = '', choiceText = '', consequence = '', manualPrinciple = '', riskScores = {} } = req.body;
+  const fallbackFeedback = [
+    `Scenario: ${scenarioText}`,
+    `Choice: ${choiceText}`,
+    `Consequence: ${consequence}`,
+    `Manual principle: ${manualPrinciple}`,
+    'Remember for exam: choose actions that keep distance, preserve safety, and document facts.',
+  ].join(' ');
+  const awsFeedback = await getAwsFeedback({
+    scenarioText,
+    choiceText,
+    consequence,
+    manualPrinciple,
+    riskScores: {
+      legalRisk: Number(riskScores.legalRisk || 0),
+      safetyRisk: Number(riskScores.safetyRisk || 0),
+      professionalism: Number(riskScores.professionalism || 0),
+      situationControl: Number(riskScores.situationControl || 0),
+      documentationReadiness: Number(riskScores.documentation || 0),
+    },
+  });
+  res.json({ feedback: awsFeedback || fallbackFeedback });
+});
+
 app.post('/api/translate', async (req, res) => {
   const { text = '', language = 'English' } = req.body;
   if (useAws && translate && language !== 'English') {

@@ -10,17 +10,17 @@ export const calculateMissionResult = (scores: HudScores[]): MissionResult => {
       acc.safetyRisk += cur.safetyRisk;
       acc.professionalism += cur.professionalism;
       acc.situationControl += cur.situationControl;
-      acc.documentationReadiness += cur.documentationReadiness;
+      acc.documentation += cur.documentation;
       return acc;
     },
-    { legalRisk: 0, safetyRisk: 0, professionalism: 0, situationControl: 0, documentationReadiness: 0 },
+    { legalRisk: 0, safetyRisk: 0, professionalism: 0, situationControl: 0, documentation: 0 },
   );
 
   const legalScore = round(100 - sums.legalRisk / total);
   const safetyScore = round(100 - sums.safetyRisk / total);
   const professionalismScore = round(sums.professionalism / total);
   const situationControlScore = round(sums.situationControl / total);
-  const documentationScore = round(sums.documentationReadiness / total);
+  const documentationScore = round(sums.documentation / total);
 
   const overallReadiness = round(
     legalScore * 0.25 +

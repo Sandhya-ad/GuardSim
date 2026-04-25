@@ -15,9 +15,13 @@ body {
 }
 
 .layout {
-  max-width: 980px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 1.5rem;
+}
+
+.app-bg {
+  min-height: 100vh;
 }
 
 .header {
@@ -60,6 +64,19 @@ body {
 
 .choices {
   margin: 0.75rem 0;
+}
+
+.action-grid button {
+  text-align: left;
+  line-height: 1.25rem;
+}
+
+.action-label {
+  display: block;
+  font-size: 0.73rem;
+  opacity: 0.85;
+  margin-bottom: 0.3rem;
+  letter-spacing: 0.03em;
 }
 
 .mission-list {
@@ -119,6 +136,114 @@ button:disabled {
   border-radius: 10px;
   border: 1px solid #334155;
   margin-bottom: 0.8rem;
+}
+
+.scene-shell {
+  width: 100%;
+  height: 380px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  margin-bottom: 0.8rem;
+}
+
+.hotspot-label {
+  border: 1px solid #fb923c;
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffedd5;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.7rem;
+}
+
+.site-sign {
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid #ef4444;
+  color: #7f1d1d;
+  background: #fef2f2;
+  border-radius: 4px;
+  padding: 0.13rem 0.2rem;
+}
+
+.sim-console {
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  background: rgba(2, 6, 23, 0.75);
+  margin-bottom: 0.75rem;
+}
+
+.sim-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  background: #172554;
+  border: 1px solid #2563eb;
+  padding: 0.25rem 0.65rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.82rem;
+}
+
+.subtitle-line {
+  margin: 0.35rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.84rem;
+}
+
+.icon-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.9rem;
+  margin-bottom: 0.7rem;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.task-chip {
+  display: inline-block;
+  background: #1f2937;
+  border: 1px solid #f59e0b;
+  color: #fde68a;
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.eta-chip {
+  display: inline-block;
+  background: #1e3a8a;
+  border: 1px solid #60a5fa;
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  margin-left: 0.55rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.notebook-panel {
+  margin-bottom: 0.75rem;
+  background: rgba(2, 6, 23, 0.75);
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.notebook-panel h4,
+.notebook-panel p {
+  margin: 0 0 0.45rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 8px #22d3ee;
 }
 
 blockquote {

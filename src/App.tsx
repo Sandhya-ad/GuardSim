@@ -1,106 +1,113 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MissionCanvas } from './components/MissionCanvas';
+import { GuardSimScene } from './game/GuardSimScene';
 import { api } from './services/api';
+import { useGameStore } from './state/gameStore';
 import { calculateMissionResult } from './utils/scoring';
-import type { HudScores, LanguageOption, Mission, MissionChoice, MissionResult, MissionScene } from './types';
+import type { LanguageOption } from './types';
 
-type AppScreen = 'landing' | 'language' | 'missions' | 'game' | 'consequence' | 'summary';
 const languages: LanguageOption[] = ['English', 'Arabic', 'Hindi', 'Punjabi', 'Urdu', 'Tagalog', 'Spanish'];
 const studentId = 'demo-user';
-
-const defaultHud: HudScores = { legalRisk: 0, safetyRisk: 0, professionalism: 60, situationControl: 55, documentationReadiness: 40 };
-const hints = {
-  legalRisk: 'Lower is better',
-  safetyRisk: 'Lower is better',
-  professionalism: 'Higher is better',
-  situationControl: 'Higher is better',
-  documentationReadiness: 'Higher is better',
+const sceneTitles = {
+  patrol: 'Guided patrol',
+  'trespasser-loitering': 'Unauthorized entry detected',
+  'trespasser-refuses': 'Subject refuses lawful direction',
+  vandalism: 'Property damage in progress',
+  'police-arrived': 'Police scene handoff',
+} as const;
+const shortStatus = {
+  patrol: 'Walk patrol path to gate marker',
+  'trespasser-loitering': 'Person inside site',
+  'trespasser-refuses': 'Person will not leave',
+  vandalism: 'Person breaking window',
+  'police-arrived': 'Police now on scene',
+} as const;
+const roleIcons = {
+  trespasser: 'Person',
+  radio: 'Call police',
+  notebook: 'Write notes',
 } as const;
 
+const firstSentence = (input: string) => {
+  const split = input.split(/[.!?]/).find((part) => part.trim().length > 0);
+  return split ? `${split.trim()}.` : input;
+};
+
 function App() {
-  const [screen, setScreen] = useState<AppScreen>('landing');
-  const [language, setLanguage] = useState<LanguageOption>('English');
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [activeMission, setActiveMission] = useState<Mission | null>(null);
-  const [sceneId, setSceneId] = useState<string>('');
-  const [history, setHistory] = useState<HudScores[]>([]);
-  const [selectedChoices, setSelectedChoices] = useState<string[]>([]);
-  const [lastChoice, setLastChoice] = useState<MissionChoice | null>(null);
-  const [feedback, setFeedback] = useState('');
-  const [translatedFeedback, setTranslatedFeedback] = useState('');
-  const [result, setResult] = useState<MissionResult | null>(null);
-  const [nextSceneId, setNextSceneId] = useState<string | null>(null);
+  const currentScreen = useGameStore((s) => s.currentScreen);
+  const setScreen = useGameStore((s) => s.setScreen);
+  const selectedLanguage = useGameStore((s) => s.selectedLanguage);
+  const setLanguage = useGameStore((s) => s.setLanguage);
+  const mission = useGameStore((s) => s.mission);
+  const currentStepId = useGameStore((s) => s.currentStepId);
+  const hud = useGameStore((s) => s.hud);
+  const choicesMade = useGameStore((s) => s.choicesMade);
+  const feedback = useGameStore((s) => s.feedback);
+  const translatedFeedback = useGameStore((s) => s.translatedFeedback);
+  const scoreHistory = useGameStore((s) => s.scoreHistory);
+  const missionComplete = useGameStore((s) => s.missionComplete);
+  const startMission = useGameStore((s) => s.startMission);
+  const applyDecision = useGameStore((s) => s.applyDecision);
+  const continueMission = useGameStore((s) => s.continueMission);
+  const setTranslatedFeedback = useGameStore((s) => s.setTranslatedFeedback);
+  const resetMission = useGameStore((s) => s.resetMission);
+  const replayFromStep = useGameStore((s) => s.replayFromStep);
+  const tickPoliceEta = useGameStore((s) => s.tickPoliceEta);
+  const toggleNoteField = useGameStore((s) => s.toggleNoteField);
+  const completeNotebook = useGameStore((s) => s.completeNotebook);
+  const interactions = useGameStore((s) => s.interactions);
   const [busy, setBusy] = useState(false);
+  const currentStep = mission.steps[currentStepId];
+
+  const result = useMemo(() => calculateMissionResult(scoreHistory), [scoreHistory]);
+  const stepNeeds = useMemo(() => {
+    if (!currentStep) return [];
+    if (currentStep.id === 'step-0-patrol') return ['Use WASD to move guard to blue marker'];
+    if (currentStep.id === 'step-1') return ['Move barrier to yellow circle', 'Tap person'];
+    if (currentStep.id === 'step-2-refuses') return ['Tap radio'];
+    if (currentStep.id === 'step-3-vandalism') return ['Tap person', 'Tap radio'];
+    if (currentStep.id === 'step-4-documentation') return ['Tap notes', 'Fill time + location + action'];
+    return [];
+  }, [currentStep]);
+  const isStepReady = useMemo(() => {
+    if (!currentStep) return false;
+    if (currentStep.id === 'step-0-patrol') return interactions.patrolComplete;
+    if (currentStep.id === 'step-1') return interactions.barrierInZone && interactions.trespasserChecked;
+    if (currentStep.id === 'step-2-refuses') return interactions.radioUsed;
+    if (currentStep.id === 'step-3-vandalism') return interactions.radioUsed && interactions.trespasserChecked;
+    if (currentStep.id === 'step-4-documentation') return interactions.notesCompleted;
+    return true;
+  }, [currentStep, interactions]);
 
   useEffect(() => {
-    api.getMissions().then(setMissions).catch(() => setMissions([]));
-  }, []);
+    if (currentScreen !== 'game') return;
+    if (interactions.policeEtaSeconds === null || interactions.policeEtaSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      tickPoliceEta();
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [currentScreen, interactions.policeEtaSeconds, tickPoliceEta]);
 
-  const activeScene: MissionScene | null = useMemo(() => {
-    if (!activeMission) return null;
-    return activeMission.scenes.find((scene) => scene.sceneId === sceneId) ?? null;
-  }, [activeMission, sceneId]);
-
-  const hud = useMemo(() => {
-    if (history.length === 0) return defaultHud;
-    const total = history.length;
-    const sums = history.reduce(
-      (acc, item) => ({
-        legalRisk: acc.legalRisk + item.legalRisk,
-        safetyRisk: acc.safetyRisk + item.safetyRisk,
-        professionalism: acc.professionalism + item.professionalism,
-        situationControl: acc.situationControl + item.situationControl,
-        documentationReadiness: acc.documentationReadiness + item.documentationReadiness,
-      }),
-      { legalRisk: 0, safetyRisk: 0, professionalism: 0, situationControl: 0, documentationReadiness: 0 },
-    );
-    return {
-      legalRisk: Math.round(sums.legalRisk / total),
-      safetyRisk: Math.round(sums.safetyRisk / total),
-      professionalism: Math.round(sums.professionalism / total),
-      situationControl: Math.round(sums.situationControl / total),
-      documentationReadiness: Math.round(sums.documentationReadiness / total),
-    };
-  }, [history]);
-
-  const beginMission = (mission: Mission) => {
-    setActiveMission(mission);
-    setSceneId(mission.startScene);
-    setHistory([]);
-    setSelectedChoices([]);
-    setLastChoice(null);
-    setFeedback('');
-    setTranslatedFeedback('');
-    setResult(null);
-    setNextSceneId(null);
-    setScreen('game');
-  };
-
-  const onHotspotSelect = (next: string) => setSceneId(next);
-
-  const submitChoice = async (choice: MissionChoice) => {
-    if (!activeMission || !activeScene) return;
+  const submitChoice = async (choiceId: string) => {
+    if (!currentStep) return;
+    const choice = currentStep.choices.find((item) => item.id === choiceId);
+    if (!choice) return;
     setBusy(true);
-    setLastChoice(choice);
-    const response = await api.submitDecision({
-      studentId,
-      missionId: activeMission.missionId,
-      sceneId: activeScene.sceneId,
-      choiceId: choice.choiceId,
-      language,
-    });
-    setHistory((prev) => [...prev, response.riskScores]);
-    setSelectedChoices((prev) => [...prev, choice.choiceId]);
-    setFeedback(response.feedback);
-    setTranslatedFeedback('');
-    setNextSceneId(response.nextSceneId);
+    const generated = await api
+      .generateFeedback({
+        scenarioText: currentStep.narration,
+        choiceText: choice.text,
+        consequence: choice.consequence,
+        manualPrinciple: currentStep.manualPrinciple,
+        riskScores: choice.scoreDelta,
+      })
+      .catch(() => '');
+    applyDecision(choice, generated || choice.feedback);
     setBusy(false);
-    setScreen('consequence');
   };
 
   const translateFeedback = async () => {
-    if (language === 'English' || !feedback) return;
-    const translated = await api.translateFeedback(feedback, language);
+    if (selectedLanguage === 'English' || !feedback) return;
+    const translated = await api.translateFeedback(feedback, selectedLanguage);
     setTranslatedFeedback(translated);
   };
 
@@ -117,117 +124,169 @@ function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const continueMission = async () => {
-    if (!activeMission) return;
-    if (!nextSceneId) {
-      const missionResult = calculateMissionResult(history);
-      setResult(missionResult);
-      await api.saveProgress(studentId, activeMission.missionId, missionResult, selectedChoices, language);
-      setScreen('summary');
-      return;
+  const continueFlow = async () => {
+    if (missionComplete) {
+      await api.saveProgress(
+        studentId,
+        mission.id,
+        result,
+        choicesMade.map((item) => item.id),
+        selectedLanguage,
+      );
     }
-    setSceneId(nextSceneId);
-    setScreen('game');
+    continueMission();
   };
 
   return (
-    <div className="layout">
+    <div className="layout app-bg">
       <header className="header">
-        <h1>GuardSim</h1>
-        <p>Playable Security Officer Practical Simulator</p>
+        <h1>GuardSim 3D</h1>
+        <p>Construction Site Trespass Simulator</p>
       </header>
 
-      {screen === 'landing' && (
+      {currentScreen === 'landing' && (
         <section className="card center">
-          <h2>Read the manual. Practice the manual. Remember the manual.</h2>
-          <p>Security guards do not work inside paragraphs. They work inside incidents.</p>
+          <h2>Trespassing Response Training</h2>
+          <p>You are a security guard. Your job is to keep people safe and follow the law.</p>
           <button onClick={() => setScreen('language')}>Start Training</button>
         </section>
       )}
 
-      {screen === 'language' && (
+      {currentScreen === 'language' && (
         <section className="card">
           <h2>Choose language support</h2>
           <p>English is always shown first. Translation is optional support.</p>
-          <div className="grid">{languages.map((item) => <button key={item} className={language === item ? 'selected' : ''} onClick={() => setLanguage(item)}>{item}</button>)}</div>
-          <button onClick={() => setScreen('missions')}>Continue to Missions</button>
+          <div className="grid">{languages.map((item) => <button key={item} className={selectedLanguage === item ? 'selected' : ''} onClick={() => setLanguage(item)}>{item}</button>)}</div>
+          <button onClick={() => setScreen('missions')}>Continue</button>
         </section>
       )}
 
-      {screen === 'missions' && (
+      {currentScreen === 'missions' && (
         <section className="card">
-          <h2>Mission Selection</h2>
-          <div className="mission-list">
-            {missions.map((mission) => (
-              <article key={mission.missionId} className="mission-card">
-                <h3>{mission.title}</h3>
-                <p>Topic: {mission.manualTopic}</p>
-                <p>Skill: {mission.skills.join(', ')}</p>
-                <p>Difficulty: {mission.difficulty} | ETA: {mission.estimatedTime}</p>
-                <button onClick={() => beginMission(mission)}>Start Mission</button>
-              </article>
-            ))}
-          </div>
+          <h2>Module 2: Trespassing</h2>
+          <article className="mission-card">
+            <h3>{mission.title}</h3>
+            <p>{mission.intro}</p>
+            <button onClick={() => setScreen('objectives')}>Continue</button>
+          </article>
         </section>
       )}
 
-      {screen === 'game' && activeMission && activeScene && (
+      {currentScreen === 'objectives' && (
         <section className="card">
-          <div className="between"><h2>Mission: {activeMission.title}</h2><strong>{activeScene.sceneId}</strong></div>
+          <h2>Training Objectives</h2>
+          <article className="mission-card">
+            <ul>
+              <li>Identify a trespasser</li>
+              <li>Communicate properly</li>
+              <li>Know when to call police</li>
+              <li>Know when NOT to use force</li>
+              <li>Document the situation</li>
+            </ul>
+            <button onClick={() => setScreen('controls')}>Continue</button>
+          </article>
+        </section>
+      )}
+
+      {currentScreen === 'controls' && (
+        <section className="card">
+          <h2>Controls Tutorial</h2>
+          <article className="mission-card">
+            <p>Move: WASD or arrow keys</p>
+            <p>Interact: click glowing dots</p>
+            <p>Open notebook: click Notes dot</p>
+            <p>Goal: follow guide steps, then choose action.</p>
+            <button onClick={startMission}>Start Simulation</button>
+          </article>
+        </section>
+      )}
+
+      {currentScreen === 'game' && currentStep && (
+        <section className="card">
+          <div className="between"><h2>Mission: {mission.title}</h2><strong>{currentStep.id}</strong></div>
           <div className="hud-grid">
-            {(Object.keys(hud) as (keyof HudScores)[]).map((key) => (
+            {(Object.keys(hud) as (keyof typeof hud)[]).map((key) => (
               <div key={key}>
                 <div className="between"><span>{key}</span><span>{hud[key]}%</span></div>
                 <progress max={100} value={hud[key]} />
-                <small>{hints[key]}</small>
+                <small>{key.includes('Risk') ? 'Lower is better' : 'Higher is better'}</small>
               </div>
             ))}
           </div>
 
-          <MissionCanvas scene={activeScene} onHotspotSelect={onHotspotSelect} />
-          <p>{activeScene.narration}</p>
-          {activeScene.dialogue && <blockquote>{activeScene.dialogue}</blockquote>}
-          {activeScene.question && <h3>{activeScene.question}</h3>}
-
-          {activeScene.hotspots && (
-            <div className="choices">
-              {activeScene.hotspots.map((hotspot) => (
-                <button key={hotspot.id} onClick={() => onHotspotSelect(hotspot.nextScene)}>{hotspot.label}</button>
-              ))}
+          <GuardSimScene />
+          <div className="sim-console">
+            <div className="sim-status">
+              <span className="status-dot" />
+              <strong>{sceneTitles[currentStep.sceneState]}</strong>
+            </div>
+            <p>{shortStatus[currentStep.sceneState]}</p>
+            {currentStep.sceneState === 'patrol' && <p className="subtitle-line">Guide: Walk and observe gate, signs, and dark corners first.</p>}
+            {currentStep.sceneState !== 'patrol' && <p className="subtitle-line">{currentStep.dialogue}</p>}
+          </div>
+          <div className="icon-legend">
+            <span>Orange dot: {roleIcons.trespasser}</span>
+            <span>Blue dot: {roleIcons.radio}</span>
+            <span>White dot: {roleIcons.notebook}</span>
+          </div>
+          {stepNeeds.length > 0 && (
+            <div className="task-chip">
+              Do first: {stepNeeds.join(' + ')}
             </div>
           )}
-
-          {activeScene.choices && (
-            <div className="choices">
-              {activeScene.choices.map((choice) => (
-                <button key={choice.choiceId} onClick={() => submitChoice(choice)} disabled={busy}>
-                  {choice.choiceId}. {choice.text}
+          {interactions.policeEtaSeconds !== null && (
+            <div className="eta-chip">
+              Police ETA: {interactions.policeEtaSeconds}s
+            </div>
+          )}
+          {interactions.notebookOpen && (
+            <div className="notebook-panel">
+              <h4>Notebook</h4>
+              <p>Select all 3:</p>
+              <div className="row">
+                <button className={interactions.noteFields.time ? 'selected' : ''} onClick={() => toggleNoteField('time')}>
+                  Time
                 </button>
-              ))}
+                <button className={interactions.noteFields.location ? 'selected' : ''} onClick={() => toggleNoteField('location')}>
+                  Location
+                </button>
+                <button className={interactions.noteFields.action ? 'selected' : ''} onClick={() => toggleNoteField('action')}>
+                  Action
+                </button>
+              </div>
+              <button onClick={completeNotebook}>Save Notes</button>
             </div>
           )}
+          <h3>Choose action</h3>
+          <div className="choices action-grid">
+            {currentStep.choices.map((choice) => (
+              <button key={choice.id} onClick={() => submitChoice(choice.id)} disabled={busy || !isStepReady}>
+                <span className="action-label">Action {choice.id}</span>
+                {firstSentence(choice.text)}
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
-      {screen === 'consequence' && activeScene && lastChoice && (
+      {currentScreen === 'consequence' && choicesMade.length > 0 && (
         <section className="card">
-          <h2>Consequence</h2>
-          <p>You chose: <strong>{lastChoice.choiceId}. {lastChoice.text}</strong></p>
-          <p className={lastChoice.isCorrect ? 'good' : 'risk'}>{lastChoice.consequence}</p>
-          <p>{feedback}</p>
-          <aside className="manual"><h4>Manual Principle</h4><p>{activeScene.manualPrinciple}</p></aside>
+          <h2>Result</h2>
+          <p>You chose: <strong>{choicesMade.at(-1)?.id}</strong></p>
+          <p className={choicesMade.at(-1)?.isCorrect ? 'good' : 'risk'}>{firstSentence(choicesMade.at(-1)?.consequence || '')}</p>
+          <p>{firstSentence(feedback)}</p>
           <div className="row">
-            {language !== 'English' && <button onClick={translateFeedback}>Explain in {language}</button>}
+            {selectedLanguage !== 'English' && <button onClick={translateFeedback}>Explain in {selectedLanguage}</button>}
             <button onClick={listenFeedback}>Listen</button>
-            <button onClick={continueMission}>Continue</button>
+            <button onClick={continueFlow}>Continue</button>
           </div>
           {translatedFeedback && <p className="translation">{translatedFeedback}</p>}
         </section>
       )}
 
-      {screen === 'summary' && activeMission && result && (
+      {currentScreen === 'summary' && (
         <section className="card">
-          <h2>Mission Complete: {activeMission.title}</h2>
+          <h2>Mission Complete: {mission.title}</h2>
           <p className="score">Overall Readiness: {result.overallReadiness}%</p>
           <div className="score-grid">
             <p>Legal Judgment: {result.legalScore}%</p>
@@ -237,12 +296,19 @@ function App() {
             <p>Documentation: {result.documentationScore}%</p>
           </div>
           <h3>Decisions Made</h3>
-          <p>{selectedChoices.join(' -> ') || 'No decisions recorded.'}</p>
+          <p>{choicesMade.map((item) => item.id).join(' -> ') || 'No decisions recorded.'}</p>
           <h3>Recommended Review</h3>
           <ul>{(result.weakTopics.length > 0 ? result.weakTopics : ['Strong performance. Keep practicing for consistency.']).map((topic) => <li key={topic}>{topic}</li>)}</ul>
+          <h3>Replay Scenarios</h3>
           <div className="row">
-            <button onClick={() => beginMission(activeMission)}>Retry Mission</button>
-            <button onClick={() => setScreen('missions')}>Next Mission</button>
+            <button onClick={() => replayFromStep('step-1')}>Replay: First Contact</button>
+            <button onClick={() => replayFromStep('step-2-refuses')}>Replay: Refusal</button>
+            <button onClick={() => replayFromStep('step-3-vandalism')}>Replay: Escalation</button>
+            <button onClick={() => replayFromStep('step-4-documentation')}>Replay: Notes</button>
+          </div>
+          <div className="row">
+            <button onClick={startMission}>Retry Mission</button>
+            <button onClick={resetMission}>Back to Mission Select</button>
           </div>
         </section>
       )}

@@ -1,65 +1,46 @@
-export type LanguageOption =
-  | 'English'
-  | 'Arabic'
-  | 'Hindi'
-  | 'Punjabi'
-  | 'Urdu'
-  | 'Tagalog'
-  | 'Spanish';
+export type LanguageOption = 'English' | 'Arabic' | 'Hindi' | 'Punjabi' | 'Urdu' | 'Tagalog' | 'Spanish';
+
+export type CameraNodeKey = 'securityPost' | 'fenceLine' | 'trailerArea' | 'policeArrival';
 
 export interface HudScores {
   legalRisk: number;
   safetyRisk: number;
   professionalism: number;
   situationControl: number;
-  documentationReadiness: number;
+  documentation: number;
 }
 
 export interface MissionChoice {
-  choiceId: string;
+  id: string;
   text: string;
   isCorrect: boolean;
-  nextScene: string | null;
   consequence: string;
-  riskScores: HudScores;
-  manualFeedback: string;
+  scoreDelta: HudScores;
+  feedback: string;
+  nextStepId: string;
+  nextCameraNode: CameraNodeKey;
 }
 
-export interface SceneHotspot {
+export interface MissionStep {
   id: string;
-  label: string;
-  nextScene: string;
-}
-
-export interface MissionScene {
-  sceneId: string;
-  background: string;
+  cameraNode: CameraNodeKey;
+  sceneState: 'patrol' | 'trespasser-loitering' | 'trespasser-refuses' | 'vandalism' | 'police-arrived';
   narration: string;
-  dialogue?: string;
-  question?: string;
-  manualPrinciple?: string;
-  hotspots?: SceneHotspot[];
-  choices?: MissionChoice[];
+  dialogue: string;
+  question: string;
+  manualPrinciple: string;
+  choices: MissionChoice[];
 }
 
 export interface Mission {
-  missionId: string;
+  id: string;
   title: string;
   manualTopic: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   estimatedTime: string;
-  skills: string[];
-  startScene: string;
-  scenes: MissionScene[];
-}
-
-export interface DecisionResponse {
-  isCorrect: boolean;
-  riskScores: HudScores;
-  consequence: string;
-  feedback: string;
-  manualConnection: string;
-  nextSceneId: string | null;
+  intro: string;
+  startStepId: string;
+  steps: Record<string, MissionStep>;
 }
 
 export interface MissionResult {

@@ -1,32 +1,28 @@
-import type { DecisionResponse, LanguageOption, Mission, MissionResult } from '../types';
-
-interface DecisionRequest {
-  studentId: string;
-  missionId: string;
-  sceneId: string;
-  choiceId: string;
-  language: LanguageOption;
-}
+import type { HudScores, LanguageOption, MissionResult } from '../types';
 
 const headers = { 'Content-Type': 'application/json' };
+const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+const buildApiUrl = (path: string) => `${apiBase}${path}`;
 
 export const api = {
-  async getMissions(): Promise<Mission[]> {
-    const response = await fetch('/api/missions');
-    return response.json();
-  },
-
-  async submitDecision(payload: DecisionRequest): Promise<DecisionResponse> {
-    const response = await fetch(`/api/missions/${payload.missionId}/decision`, {
+  async generateFeedback(payload: {
+    scenarioText: string;
+    choiceText: string;
+    consequence: string;
+    manualPrinciple: string;
+    riskScores: HudScores;
+  }): Promise<string> {
+    const response = await fetch(buildApiUrl('/api/feedback'), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
     });
-    return response.json();
+    const data = await response.json();
+    return (data.feedback as string) || '';
   },
 
   async translateFeedback(text: string, language: LanguageOption): Promise<string> {
-    const response = await fetch('/api/translate', {
+    const response = await fetch(buildApiUrl('/api/translate'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ text, language }),
@@ -36,7 +32,7 @@ export const api = {
   },
 
   async generateAudio(text: string): Promise<string | null> {
-    const response = await fetch('/api/audio', {
+    const response = await fetch(buildApiUrl('/api/audio'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ text }),
@@ -46,7 +42,7 @@ export const api = {
   },
 
   async saveProgress(studentId: string, missionId: string, result: MissionResult, choices: string[], language: LanguageOption): Promise<void> {
-    await fetch('/api/mission-result', {
+    await fetch(buildApiUrl('/api/mission-result'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ studentId, missionId, language, choices, result }),
