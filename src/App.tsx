@@ -56,6 +56,10 @@ function App() {
   const completeNotebook = useGameStore((s) => s.completeNotebook);
   const interactions = useGameStore((s) => s.interactions);
   const [busy, setBusy] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [coachInput, setCoachInput] = useState('');
+  const [coachAnswer, setCoachAnswer] = useState('');
+  const [coachLoading, setCoachLoading] = useState(false);
   const currentStep = mission.steps[currentStepId];
 
   const result = useMemo(() => calculateMissionResult(scoreHistory), [scoreHistory]);
@@ -135,6 +139,15 @@ function App() {
       );
     }
     continueMission();
+  };
+
+  const askCoach = async (prompt?: string) => {
+    const question = (prompt ?? coachInput).trim();
+    if (!question) return;
+    setCoachLoading(true);
+    const answer = await api.chatWithCoach(question).catch(() => 'Coach is unavailable right now. Please try again.');
+    setCoachAnswer(answer);
+    setCoachLoading(false);
   };
 
   return (
@@ -311,6 +324,51 @@ function App() {
             <button onClick={resetMission}>Back to Mission Select</button>
           </div>
         </section>
+      )}
+
+      <button
+        className="coach-fab"
+        onClick={() => setCoachOpen((open) => !open)}
+        aria-label="Open security coach chatbot"
+        title="Security Coach"
+      >
+        💬
+      </button>
+      {coachOpen && (
+        <aside className="coach-drawer">
+          <div className="between">
+            <h3>Security Coach</h3>
+            <button className="ghost-btn" onClick={() => setCoachOpen(false)}>Close</button>
+          </div>
+          <p className="coach-sub">Ask concepts from the Alberta security manual.</p>
+          <div className="coach-shell">
+            <label htmlFor="coachQuestion">Ask a question</label>
+            <textarea
+              id="coachQuestion"
+              value={coachInput}
+              onChange={(event) => setCoachInput(event.target.value)}
+              placeholder="Example: Explain legal risk vs safety risk in security work."
+              rows={4}
+            />
+            <div className="row two-col">
+              <button onClick={() => askCoach()} disabled={coachLoading}>
+                {coachLoading ? 'Thinking...' : 'Ask Coach'}
+              </button>
+              <button
+                onClick={() => {
+                  setCoachInput('');
+                  setCoachAnswer('');
+                }}
+              >
+                Clear
+              </button>
+            </div>
+            <div className="coach-answer">
+              <strong>Coach Answer</strong>
+              <p>{coachAnswer || 'Ask a concept question to begin.'}</p>
+            </div>
+          </div>
+        </aside>
       )}
     </div>
   );

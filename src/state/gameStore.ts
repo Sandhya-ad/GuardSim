@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { constructionSiteMission } from '../data/missions/constructionSiteMission';
 import type { CameraNodeKey, HudScores, LanguageOption, MissionChoice } from '../types';
 
-type Screen = 'landing' | 'language' | 'missions' | 'objectives' | 'controls' | 'game' | 'consequence' | 'summary';
+type Screen = 'landing' | 'language' | 'missions' | 'objectives' | 'controls' | 'game' | 'consequence' | 'summary' | 'coach';
 
 const startingHud: HudScores = {
   legalRisk: 0,

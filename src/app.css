@@ -58,6 +58,10 @@ body {
   gap: 0.75rem;
 }
 
+.row.two-col {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
 .grid {
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 }
@@ -285,6 +289,85 @@ progress {
   border-radius: 10px;
   padding: 0.7rem;
   color: #fde68a;
+}
+
+.coach-shell {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.coach-shell textarea {
+  width: 100%;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.65rem;
+  resize: vertical;
+  font: inherit;
+}
+
+.quick-prompts {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.quick-prompts button {
+  text-align: left;
+  background: #1e40af;
+}
+
+.coach-answer {
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: rgba(2, 6, 23, 0.65);
+}
+
+.coach-answer p {
+  margin: 0.45rem 0 0;
+  color: #cbd5e1;
+}
+
+.coach-fab {
+  position: fixed;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: 1px solid #60a5fa;
+  background: #1d4ed8;
+  font-size: 1.35rem;
+  box-shadow: 0 8px 22px rgba(29, 78, 216, 0.45);
+  z-index: 50;
+}
+
+.coach-drawer {
+  position: fixed;
+  top: 18px;
+  right: 90px;
+  width: min(400px, calc(100vw - 110px));
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  padding: 0.95rem;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  background: rgba(2, 6, 23, 0.97);
+  box-shadow: 0 14px 35px rgba(2, 6, 23, 0.55);
+  z-index: 49;
+}
+
+.coach-sub {
+  margin: 0.25rem 0 0.7rem;
+  color: #93c5fd;
+  font-size: 0.9rem;
+}
+
+.ghost-btn {
+  background: #0f172a;
+  border-color: #475569;
 }
 
 .score {

@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import express from 'express';
 import cors from 'cors';
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
@@ -8,6 +10,9 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { missions } from './missions.js';
 
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
+
 const app = express();
 const port = Number(process.env.PORT || 8787);
 const progressStore = new Map();
@@ -16,11 +21,16 @@ const region = process.env.AWS_REGION || 'ca-central-1';
 const tableName = process.env.GUARDSIM_PROGRESS_TABLE || 'GuardSimProgress';
 const bedrockModelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
 const pollyVoiceId = process.env.POLLY_VOICE_ID || 'Joanna';
+const manualPdfPath =
+  process.env.MANUAL_PDF_PATH ||
+  'C:/Users/hp/AppData/Roaming/Cursor/User/workspaceStorage/02002a0029211450f478ae1b8f9b6b62/pdfs/2ed6a15d-7fd1-44da-b192-603d3fa8dc39/abst-particpants-manual-oct-2014-2.pdf';
 
 const bedrock = useAws ? new BedrockRuntimeClient({ region }) : null;
 const translate = useAws ? new TranslateClient({ region }) : null;
 const polly = useAws ? new PollyClient({ region }) : null;
 const ddbDoc = useAws ? DynamoDBDocumentClient.from(new DynamoDBClient({ region })) : null;
+let cachedManualText = '';
+let manualLoadPromise = null;
 
 app.use(cors());
 app.use(express.json());
@@ -90,6 +100,46 @@ const getAwsFeedback = async (payload) => {
   }
 };
 
+const buildCoachFallback = (question) => {
+  const lower = String(question || '').toLowerCase();
+  if (lower.includes('observe') || lower.includes('deter') || lower.includes('report')) {
+    return 'Observe means watch and gather facts. Deter means use professional presence and clear instructions to reduce risk. Report means document what happened and notify the right people.';
+  }
+  if (lower.includes('trespass')) {
+    return 'For trespassing, first ask the person to leave if safe. If they refuse, call police and continue observing from a safe distance. Record what you saw and what actions you took.';
+  }
+  if (lower.includes('note') || lower.includes('report') || lower.includes('documentation')) {
+    return 'Good notes are factual and objective: include date, time, location, people involved, observed behavior, actions taken, and who you notified.';
+  }
+  return 'Security practice tip: focus on safety, legal limits, clear communication, and objective documentation. Ask me about trespassing, escalation, or note writing for specific guidance.';
+};
+
+const getAwsCoachAnswer = async (question) => {
+  if (!bedrock) return null;
+  try {
+    const manualContext = await getManualContext(question);
+    const prompt = `You are a security training coach for Alberta Basic Security Training learners.
+Explain concepts in simple English.
+Keep answer under 140 words.
+Do not invent laws or facts.
+Use only the manual context provided.
+If context is missing, say the information is not available in provided manual extract.
+Manual context:
+${manualContext || 'Manual context unavailable.'}
+
+Question: ${question}`;
+    const response = await bedrock.send(
+      new ConverseCommand({
+        modelId: bedrockModelId,
+        messages: [{ role: 'user', content: [{ text: prompt }] }],
+      }),
+    );
+    return response.output?.message?.content?.[0]?.text || null;
+  } catch (error) {
+    return null;
+  }
+};
+
 const languageCodeMap = {
   English: 'en',
   Arabic: 'ar',
@@ -109,6 +159,53 @@ const streamToBuffer = async (audioStream) => {
   if (audioStream instanceof Uint8Array) return Buffer.from(audioStream);
   if (Buffer.isBuffer(audioStream)) return audioStream;
   return null;
+};
+
+const ensureManualLoaded = async () => {
+  if (cachedManualText) return cachedManualText;
+  if (manualLoadPromise) return manualLoadPromise;
+  manualLoadPromise = fs
+    .readFile(manualPdfPath)
+    .then(async (buffer) => {
+      const parser = new pdfParse.PDFParse({ data: buffer });
+      const result = await parser.getText();
+      await parser.destroy();
+      return result;
+    })
+    .then((result) => {
+      cachedManualText = String(result.text || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return cachedManualText;
+    })
+    .catch(() => '');
+  return manualLoadPromise;
+};
+
+const getManualContext = async (question) => {
+  const text = await ensureManualLoaded();
+  if (!text) return '';
+  const keywords = String(question || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 3);
+  if (keywords.length === 0) return text.slice(0, 1400);
+
+  const windows = [];
+  const lower = text.toLowerCase();
+  keywords.forEach((keyword) => {
+    let index = lower.indexOf(keyword);
+    let scans = 0;
+    while (index !== -1 && scans < 4) {
+      const start = Math.max(0, index - 280);
+      const end = Math.min(text.length, index + 380);
+      windows.push(text.slice(start, end));
+      index = lower.indexOf(keyword, index + keyword.length);
+      scans += 1;
+    }
+  });
+
+  return [...new Set(windows)].join('\n---\n').slice(0, 2200);
 };
 
 app.get('/api/missions', (_req, res) => {
@@ -231,6 +328,20 @@ app.post('/api/audio', async (req, res) => {
   }
   // Fallback: frontend browser speech synthesis.
   res.json({ audioUrl: null });
+});
+
+app.post('/api/chat', async (req, res) => {
+  const question = String(req.body.question || '').trim();
+  if (!question) {
+    res.status(400).json({ message: 'Question is required.' });
+    return;
+  }
+  const manualContext = await getManualContext(question);
+  const awsAnswer = await getAwsCoachAnswer(question);
+  const fallback = manualContext
+    ? `Manual reference: ${manualContext.slice(0, 520)}...`
+    : buildCoachFallback(question);
+  res.json({ answer: awsAnswer || fallback });
 });
 
 app.post('/api/mission-result', async (req, res) => {

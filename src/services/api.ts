@@ -48,4 +48,14 @@ export const api = {
       body: JSON.stringify({ studentId, missionId, language, choices, result }),
     });
   },
+
+  async chatWithCoach(question: string): Promise<string> {
+    const response = await fetch(buildApiUrl('/api/chat'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ question }),
+    });
+    const data = await response.json();
+    return (data.answer as string) || 'No response available.';
+  },
 };
