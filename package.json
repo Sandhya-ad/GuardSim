@@ -1,0 +1,37 @@
+{
+  "name": "secure-pro",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:web": "vite",
+    "dev:api": "set PORT=8788&& node backend/server.js",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start:api": "set PORT=8788&& node backend/server.js"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1037.0",
+    "@aws-sdk/client-dynamodb": "^3.1037.0",
+    "@aws-sdk/client-polly": "^3.1037.0",
+    "@aws-sdk/client-translate": "^3.1037.0",
+    "@aws-sdk/lib-dynamodb": "^3.1037.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "phaser": "^4.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  }
+}

@@ -1,0 +1,172 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.4;
+  color: #e5e7eb;
+  background: #0b1020;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #1f2a4a, #0b1020 45%);
+}
+
+.layout {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.header {
+  margin-bottom: 1rem;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.header p {
+  margin: 0.25rem 0 0;
+  color: #93c5fd;
+}
+
+.card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #1e3a8a;
+  border-radius: 14px;
+  padding: 1.25rem;
+}
+
+.center {
+  text-align: center;
+}
+
+.grid,
+.choices,
+.row,
+.mission-list,
+.score-grid,
+.hud-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.grid {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.choices {
+  margin: 0.75rem 0;
+}
+
+.mission-list {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.hud-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 0.75rem 0 1rem;
+}
+
+.mission-card {
+  border: 1px solid #334155;
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 0.9rem;
+}
+
+.between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+button {
+  border: 1px solid #60a5fa;
+  background: #1d4ed8;
+  color: white;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+button.selected {
+  background: #059669;
+  border-color: #34d399;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.scene-image {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid #334155;
+}
+
+.phaser-host {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  margin-bottom: 0.8rem;
+}
+
+blockquote {
+  border-left: 4px solid #60a5fa;
+  margin: 0.8rem 0;
+  padding: 0.1rem 0.9rem;
+  color: #bfdbfe;
+}
+
+progress {
+  width: 100%;
+  height: 12px;
+}
+
+.manual {
+  margin-top: 1rem;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.scores small {
+  color: #cbd5e1;
+}
+
+.good {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.risk {
+  color: #fda4af;
+  font-weight: 600;
+}
+
+.translation {
+  border: 1px dashed #f59e0b;
+  border-radius: 10px;
+  padding: 0.7rem;
+  color: #fde68a;
+}
+
+.score {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+ul {
+  margin-top: 0.4rem;
+}
